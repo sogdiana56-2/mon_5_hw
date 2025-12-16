@@ -1,7 +1,8 @@
 from rest_framework import serializers
-from . import models
 from django.contrib.auth.models import User
-from rest_framework.exceptions import ValidationError
+from .models import SMSCode
+import random
+
 
 class RegisterSerializers(serializers.Serializer):
     code = serializers.CharField(max_length=6)
@@ -9,17 +10,28 @@ class RegisterSerializers(serializers.Serializer):
     password = serializers.CharField(max_length=6)
     comfirm_password = serializers.CharField(max_length=6)
 
-    def validate(self, data):
-        if data ['password'] != data ['comfirm_password']:
-            raise serializers.ValidationError('Passwords do not match')
-        return data
+    class Meta:
+        model = User
+        fields = ["id", "username", "email", "password", "comfirm_password"]
 
-    def validate_username(self, username):
-        try:
-            User.objects.filter(username=username).exists()
-        except User.DoesNotExixt:
-            return username
-        raise serializers.ValidationError('this username is already taken')
+        def create(self, validated_data):
+            password = validated_data.pop("password")
+            user = User.objects.create(
+                username=validated_data["username"],
+                email=validated_data.get("email", ""),
+                is_active=False
+            )
+            user.set_password(password)
+            user.save()
+
+            code = str(random.randint(100000, 999999))
+            ConfirmCode.objects.create(user=user, code=code)
+
+            user.confirmation_code = code
+            return user
+
+class ConfirmSerializer(serializers.Serializer):
+    code = serializers.CharField(max_length=6)
 
 class LoginSerializer(serializers.Serializer):
     username = serializers.CharField(max_length=6)
